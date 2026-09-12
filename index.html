@@ -2,10 +2,15 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>富宇質青公告產生器</title>
     <!-- 引入截圖套件 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body { 
             font-family: "Microsoft JhengHei", "PingFang TC", sans-serif; 
             display: flex; 
@@ -13,9 +18,7 @@
             padding: 20px; 
             background: #f0f0f0; 
             margin: 0; 
-            box-sizing: border-box;
-            height: 100vh;
-            overflow: hidden;
+            min-height: 100vh;
         }
         
         .control-panel { 
@@ -28,7 +31,6 @@
             max-height: calc(100vh - 40px);
             overflow-y: auto; 
             flex-shrink: 0;
-            box-sizing: border-box;
         }
         .control-panel label { display: block; margin-top: 10px; font-weight: bold; color: #333; }
         .control-panel input, .control-panel select, .control-panel textarea { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; font-size: 14px; }
@@ -110,27 +112,29 @@
         .btn { display: block; width: 100%; padding: 12px; margin-top: 15px; background: #007BFF; color: white; text-align: center; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
         .btn:hover { background: #0056b3; }
 
-        /* 自適應縮放容器：靠左貼齊控制面板 */
-		.preview-wrapper {
-			flex-grow: 1;
-			height: calc(100vh - 40px);
-			display: flex;
-			align-items: flex-start;
-			justify-content: flex-start; /* 靠左對齊，緊接在控制面板旁 */
-			overflow: hidden;
-		}
+        /* 預覽區外層：允許水平捲動，絕對不遮蔽任何邊緣 */
+        .preview-wrapper {
+            flex-grow: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            overflow-x: auto;
+            overflow-y: hidden;
+            width: 100%;
+        }
 
-		.preview-container { 
-			width: 794px; 
-			height: 1123px; 
-			position: relative; 
-			background: white; 
-			box-shadow: 0 0 10px rgba(0,0,0,0.2); 
-			overflow: hidden; 
-			flex-shrink: 0; 
-			transform-origin: top left;  /* 錨點改為左上角 */
-			transition: transform 0.15s ease-out;
-		}
+        /* 預覽區本體：錨點嚴格鎖定在 top left，防止左邊超出消失 */
+        .preview-container { 
+            width: 794px; 
+            height: 1123px; 
+            position: relative; 
+            background: white; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.2); 
+            overflow: hidden; 
+            flex-shrink: 0; 
+            transform-origin: top left !important;
+            transition: transform 0.1s ease-out;
+        }
         
         .bg-image { 
             width: 100%; 
@@ -224,6 +228,30 @@
             justify-content: flex-start; 
             line-height: 1.6; 
         }
+
+        /* 手機與窄螢幕適配 */
+        @media (max-width: 900px) {
+            body {
+                flex-direction: column;
+                padding: 10px;
+                gap: 15px;
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+
+            .control-panel {
+                width: 100%;
+                max-height: none;
+                overflow-y: visible;
+            }
+
+            .preview-wrapper {
+                width: 100%;
+                overflow-x: auto; /* 允許橫向滑動以防萬一 */
+                overflow-y: visible;
+                display: block;   /* 轉為區塊元素，排版穩定 */
+            }
+        }
     </style>
 </head>
 <body>
@@ -289,23 +317,36 @@
     </div>
 
     <script>
-        // 自動依照當前視窗高度動態計算縮放比例，並靠左貼齊
-		function autoScalePreview() {
-			const preview = document.getElementById('a4-preview');
-			if (!preview) return;
+        function autoScalePreview() {
+            const preview = document.getElementById('a4-preview');
+            const wrapper = document.querySelector('.preview-wrapper');
+            if (!preview || !wrapper) return;
 
-			const availableHeight = window.innerHeight - 40;
-			const baseHeight = 1123;
-			const baseWidth = 794;
+            const baseWidth = 794;
+            const baseHeight = 1123;
+            const isMobile = window.innerWidth <= 900;
 
-			// 計算最佳縮放比
-			let scaleRatio = (availableHeight / baseHeight) * 0.95;
-			scaleRatio = Math.min(Math.max(scaleRatio, 0.5), 1.4);
+            if (isMobile) {
+                // 手機端：以 wrapper 實際寬度等比縮放，確保完整塞進手機螢幕且靠左對齊
+                const availableWidth = wrapper.clientWidth || (window.innerWidth - 20);
+                const scaleRatio = availableWidth / baseWidth;
 
-			// 縮放畫面，並消除縮放產生的多餘右側空白佔位
-			preview.style.transform = `scale(${scaleRatio})`;
-			preview.style.marginRight = `-${baseWidth * (1 - scaleRatio)}px`;
-		}
+                preview.style.transform = `scale(${scaleRatio})`;
+                preview.style.marginRight = '0px';
+
+                // 動態設定外層高度，避免縮放後下方留出過大空白
+                wrapper.style.height = `${baseHeight * scaleRatio + 15}px`;
+            } else {
+                // 電腦端：依高度計算，靠左緊鄰輸入面板
+                const availableHeight = window.innerHeight - 40;
+                let scaleRatio = (availableHeight / baseHeight) * 0.95;
+                scaleRatio = Math.min(Math.max(scaleRatio, 0.5), 1.4);
+
+                preview.style.transform = `scale(${scaleRatio})`;
+                preview.style.marginRight = `-${baseWidth * (1 - scaleRatio)}px`;
+                wrapper.style.height = 'calc(100vh - 40px)';
+            }
+        }
 
         window.addEventListener('resize', autoScalePreview);
 
